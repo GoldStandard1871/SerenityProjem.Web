@@ -114,6 +114,8 @@ public partial class Startup
         services.AddSingleton<IUploadAVScanner, ClamAVUploadScanner>();
         services.AddSingleton<IUserPasswordValidator, AppServices.UserPasswordValidator>();
         services.AddUserProvider<AppServices.UserAccessor, AppServices.UserRetrieveService>();
+        services.AddSingleton<Administration.IUserActivityService, Administration.UserActivityService>();
+        services.AddSignalR();
         services.AddServiceHandlers();
         services.AddDynamicScripts();
         services.AddCssBundling();
@@ -212,6 +214,7 @@ public partial class Startup
 
         app.UseEndpoints(endpoints => {
             endpoints.MapControllers();
+            endpoints.MapHub<Administration.UserActivityHub>("/userActivityHub");
         });
 
 

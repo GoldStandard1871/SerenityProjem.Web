@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace SerenityProjem.Membership.Pages;
 
@@ -39,7 +41,8 @@ public partial class AccountPage : Controller
     [HttpPost, JsonRequest]
     public Result<ServiceResponse> Login(LoginRequest request,
         [FromServices] IUserPasswordValidator passwordValidator,
-        [FromServices] IUserClaimCreator userClaimCreator)
+        [FromServices] IUserClaimCreator userClaimCreator,
+        [FromServices] Administration.IUserActivityService userActivityService)
     {
 
         return this.ExecuteMethod(() =>
@@ -62,6 +65,25 @@ public partial class AccountPage : Controller
             {
                 var principal = userClaimCreator.CreatePrincipal(username, authType: "Password");
                 HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal).GetAwaiter().GetResult();
+                
+                // User activity tracking
+                var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? username;
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "";
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+                
+                _ = Task.Run(async () => 
+                {
+                    try
+                    {
+                        await userActivityService.UserConnectedAsync(userId, username, ipAddress, userAgent);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log error but don't fail login
+                        Console.WriteLine($"Error tracking user activity: {ex.Message}");
+                    }
+                });
+                
                 return new ServiceResponse();
             }
 
@@ -84,8 +106,25 @@ public partial class AccountPage : Controller
         return "OK";
     }
 
-    public ActionResult Signout()
+    public ActionResult Signout([FromServices] Administration.IUserActivityService userActivityService)
     {
+        // Track user disconnect before signing out
+        var userId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(userId))
+        {
+            _ = Task.Run(async () => 
+            {
+                try
+                {
+                    await userActivityService.UserDisconnectedAsync(userId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error tracking user disconnect: {ex.Message}");
+                }
+            });
+        }
+
         HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         HttpContext.RequestServices.GetService<IElevationHandler>()?.DeleteToken();
         return new RedirectResult("~/");

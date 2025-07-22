@@ -145,6 +145,20 @@ ViewData["PageId"] = "Dashboard";
 </div>
 
 <div class="row">
+    <div class="col-lg-3 col-sm-6">
+        <div class="card s-dashboard-card-sm bg-danger bg-opacity-50">
+            <div class="card-body">
+                <h3 id="online-users-count">0</h3>
+                <p>Online Users</p>
+            </div>
+            <div class="icon">
+                <i class="fa fa-users"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
     <section class="col-lg-7">
         <div class="card s-dashboard-card">
             <div class="card-body">
@@ -268,6 +282,34 @@ ViewData["PageId"] = "Dashboard";
 <script>
 
     $(function () {
+        // Import and setup UserActivity SignalR client
+        import('../Administration/UserActivity/UserActivityClient.js').then(module => {
+            const userActivityClient = module.userActivityClient;
+            
+            // Load initial online users count
+            $.ajax({
+                url: '/Services/Administration/UserActivity/GetOnlineUsersCount',
+                type: 'POST',
+                contentType: 'application/json',
+                success: function(response) {
+                    $('#online-users-count').text(response.Count || 0);
+                },
+                error: function() {
+                    console.log('Error loading initial online users count');
+                }
+            });
+            
+            // Setup SignalR callbacks
+            userActivityClient.onOnlineCountChanged((count) => {
+                $('#online-users-count').text(count);
+            });
+            
+            userActivityClient.start().catch(err => {
+                console.error('Failed to start UserActivity connection:', err);
+            });
+        }).catch(err => {
+            console.error('Failed to load UserActivity client:', err);
+        });
 
         
         $('.daterange').daterangepicker({
