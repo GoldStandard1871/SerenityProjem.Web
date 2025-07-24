@@ -71,16 +71,20 @@ public partial class AccountPage : Controller
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "";
                 var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
                 
+                Console.WriteLine($"[UserActivity] Login attempt - UserId: {userId}, Username: {username}, IP: {ipAddress}");
+                
                 _ = Task.Run(async () => 
                 {
                     try
                     {
+                        Console.WriteLine($"[UserActivity] Calling UserConnectedAsync for {username}");
                         await userActivityService.UserConnectedAsync(userId, username, ipAddress, userAgent);
+                        Console.WriteLine($"[UserActivity] UserConnectedAsync completed for {username}");
                     }
                     catch (Exception ex)
                     {
-                        // Log error but don't fail login
-                        Console.WriteLine($"Error tracking user activity: {ex.Message}");
+                        Console.WriteLine($"[UserActivity] Error tracking user activity: {ex.Message}");
+                        Console.WriteLine($"[UserActivity] Stack trace: {ex.StackTrace}");
                     }
                 });
                 

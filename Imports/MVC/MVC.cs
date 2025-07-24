@@ -5,6 +5,14 @@ public static partial class MVC
 {
     public static partial class Views
     {
+        public static partial class Administration
+        {
+            public static partial class UserActivityHistory
+            {
+                public const string UserActivityHistoryIndex = "~/Modules/Administration/UserActivityHistory/UserActivityHistoryIndex.cshtml";
+            }
+        }
+
         public static partial class Common
         {
             public static partial class Dashboard

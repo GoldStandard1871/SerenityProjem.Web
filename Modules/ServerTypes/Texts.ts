@@ -43,6 +43,21 @@ namespace texts {
                 export const Username: string;
             }
 
+            namespace UserActivityHistory {
+                export const ActivityTime: string;
+                export const ActivityType: string;
+                export const Details: string;
+                export const Id: string;
+                export const IpAddress: string;
+                export const Isp: string;
+                export const Location: string;
+                export const SessionId: string;
+                export const Timezone: string;
+                export const UserAgent: string;
+                export const UserId: string;
+                export const Username: string;
+            }
+
             namespace UserPermission {
                 export const Granted: string;
                 export const PermissionKey: string;
@@ -207,6 +222,7 @@ const Texts: typeof texts = proxyTexts({}, '', {
             Role: {},
             RolePermission: {},
             User: {},
+            UserActivityHistory: {},
             UserPermission: {},
             UserRole: {}
         },

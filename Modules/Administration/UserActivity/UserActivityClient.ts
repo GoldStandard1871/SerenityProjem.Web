@@ -8,6 +8,8 @@ export interface OnlineUserInfo {
     ipAddress: string;
     userAgent: string;
     location: string;
+    isp: string;
+    timezone: string;
 }
 
 export class UserActivityClient {
@@ -28,18 +30,22 @@ export class UserActivityClient {
             .build();
 
         this.connection.on("UserConnected", (user: OnlineUserInfo) => {
+            console.log('[UserActivityClient] User connected:', user);
             this.onUserConnectedCallbacks.forEach(callback => callback(user));
         });
 
         this.connection.on("UserDisconnected", (user: OnlineUserInfo) => {
+            console.log('[UserActivityClient] User disconnected:', user);
             this.onUserDisconnectedCallbacks.forEach(callback => callback(user));
         });
 
         this.connection.on("OnlineUsersCountChanged", (count: number) => {
+            console.log('[UserActivityClient] Online count changed:', count);
             this.onOnlineCountChangedCallbacks.forEach(callback => callback(count));
         });
 
         this.connection.on("UserActivityUpdated", (user: OnlineUserInfo) => {
+            console.log('[UserActivityClient] User activity updated:', user);
             this.onUserActivityUpdatedCallbacks.forEach(callback => callback(user));
         });
 

@@ -115,7 +115,13 @@ public partial class Startup
         services.AddSingleton<IUserPasswordValidator, AppServices.UserPasswordValidator>();
         services.AddUserProvider<AppServices.UserAccessor, AppServices.UserRetrieveService>();
         services.AddSingleton<Administration.IUserActivityService, Administration.UserActivityService>();
-        services.AddSignalR();
+        services.AddSignalR(options =>
+        {
+            // Optimize timeout settings for faster disconnect detection
+            options.ClientTimeoutInterval = TimeSpan.FromSeconds(15); // Default: 30 seconds
+            options.KeepAliveInterval = TimeSpan.FromSeconds(7); // Default: 15 seconds
+            options.HandshakeTimeout = TimeSpan.FromSeconds(5); // Default: 15 seconds
+        });
         services.AddServiceHandlers();
         services.AddDynamicScripts();
         services.AddCssBundling();

@@ -236,43 +236,61 @@ ViewData["PageId"] = "Dashboard";
         </div>
 
         <div class="card s-dashboard-card">
-            <div class="card-body p-0">
-                <div id="calendar" style="width: 100%"></div>
+            <div class="card-header d-flex">
+                <h3 class="card-title">Online Users</h3>
+                <div class="ms-auto">
+                    <small class="text-muted" id="privacy-note"></small>
+                </div>
             </div>
-            <div class="card-footer py-4">
-                <div class="row">
-                    <div class="col-sm-6">
-                        <div class="clearfix">
-                            <span class="pull-left">Task #1</span>
-                            <small class="float-end">90%</small>
-                        </div>
-                        <div class="progress xs">
-                            <div class="progress-bar progress-bar-green" style="width: 90%;"></div>
-                        </div>
-                        <div class="clearfix">
-                            <span class="pull-left">Task #2</span>
-                            <small class="float-end">70%</small>
-                        </div>
-                        <div class="progress xs">
-                            <div class="progress-bar progress-bar-green" style="width: 70%;"></div>
-                        </div>
-                    </div>
-                    <div class="col-sm-6">
-                        <div class="clearfix">
-                            <span class="pull-left">Task #3</span>
-                            <small class="float-end">60%</small>
-                        </div>
-                        <div class="progress xs">
-                            <div class="progress-bar progress-bar-green" style="width: 60%;"></div>
-                        </div>
-                        <div class="clearfix">
-                            <span class="pull-left">Task #4</span>
-                            <small class="float-end">40%</small>
-                        </div>
-                        <div class="progress xs">
-                            <div class="progress-bar progress-bar-green" style="width: 40%;"></div>
-                        </div>
-                    </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="online-users-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Location</th>
+                                <th>ISP / Timezone</th>
+                                <th>Connected Since</th>
+                                <th>Last Activity</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="no-users-row">
+                                <td colspan="6" class="text-center text-muted">No users online</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card s-dashboard-card">
+            <div class="card-header d-flex">
+                <h3 class="card-title">Recent Activity</h3>
+                <div class="ms-auto">
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshActivityHistory()">
+                        <i class="fa fa-refresh"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="activity-history-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Activity</th>
+                                <th>Location</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -282,34 +300,244 @@ ViewData["PageId"] = "Dashboard";
 <script>
 
     $(function () {
-        // Import and setup UserActivity SignalR client
-        import('../Administration/UserActivity/UserActivityClient.js').then(module => {
-            const userActivityClient = module.userActivityClient;
-            
-            // Load initial online users count
+        console.log('[Dashboard] Initializing online users tracking...');
+        
+        // Load online users count via AJAX
+        function loadOnlineUsersCount() {
             $.ajax({
                 url: '/Services/Administration/UserActivity/GetOnlineUsersCount',
                 type: 'POST',
                 contentType: 'application/json',
+                data: '{}',
                 success: function(response) {
-                    $('#online-users-count').text(response.Count || 0);
+                    console.log('[Dashboard] Online users response:', response);
+                    var count = response.Count || 0;
+                    $('#online-users-count').text(count);
+                    console.log('[Dashboard] Updated online users count to:', count);
                 },
-                error: function() {
-                    console.log('Error loading initial online users count');
+                error: function(xhr, status, error) {
+                    console.error('[Dashboard] Error loading online users count:', {
+                        status: status,
+                        error: error,
+                        responseText: xhr.responseText
+                    });
+                    $('#online-users-count').text('?');
                 }
             });
+        }
+
+        // Load online users list via AJAX
+        function loadOnlineUsers() {
+            $.ajax({
+                url: '/Services/Administration/UserActivity/GetOnlineUsers',
+                type: 'POST',
+                contentType: 'application/json',
+                data: '{}',
+                success: function(response) {
+                    console.log('[Dashboard] Online users list response:', response);
+                    updateOnlineUsersTable(response.Entities || []);
+                },
+                error: function(xhr, status, error) {
+                    console.error('[Dashboard] Error loading online users list:', {
+                        status: status,
+                        error: error,
+                        responseText: xhr.responseText
+                    });
+                }
+            });
+        }
+
+        // Update online users table
+        function updateOnlineUsersTable(users) {
+            var tbody = $('#online-users-table tbody');
+            tbody.empty();
             
-            // Setup SignalR callbacks
-            userActivityClient.onOnlineCountChanged((count) => {
+            if (users.length === 0) {
+                tbody.append('<tr id="no-users-row"><td colspan="6" class="text-center text-muted">No users online</td></tr>');
+                return;
+            }
+            
+            users.forEach(function(user) {
+                var connectionTime = new Date(user.ConnectionTime);
+                var lastActivity = new Date(user.LastActivity);
+                var now = new Date();
+                var timeDiff = Math.floor((now - lastActivity) / 1000); // seconds
+                
+                var status = 'Active';
+                var statusClass = 'text-success';
+                if (timeDiff > 300) { // 5 minutes
+                    status = 'Away';
+                    statusClass = 'text-warning';
+                } else if (timeDiff > 60) { // 1 minute
+                    status = 'Idle';
+                    statusClass = 'text-info';
+                }
+                
+                var row = '<tr data-user-id="' + user.UserId + '">' +
+                    '<td><strong>' + (user.Username || 'Unknown') + '</strong></td>' +
+                    '<td>' + (user.Location || 'Unknown') + '</td>' +
+                    '<td><small class="text-muted">📡 ' + (user.Isp || 'Unknown ISP') + '<br>🕐 ' + (user.Timezone || 'Unknown') + '</small></td>' +
+                    '<td>' + connectionTime.toLocaleString() + '</td>' +
+                    '<td>' + lastActivity.toLocaleString() + '</td>' +
+                    '<td><span class="badge ' + statusClass + '">' + status + '</span></td>' +
+                    '</tr>';
+                tbody.append(row);
+            });
+        }
+        
+        // Initialize SignalR connection for real-time updates
+        try {
+            var connection = new signalR.HubConnectionBuilder()
+                .withUrl("/userActivityHub")
+                .withAutomaticReconnect([0, 2000, 5000, 10000]) // Fast reconnection
+                .build();
+
+            connection.on("OnlineUsersCountChanged", function (count) {
+                console.log('[Dashboard] SignalR: Online count changed to:', count);
                 $('#online-users-count').text(count);
             });
-            
-            userActivityClient.start().catch(err => {
-                console.error('Failed to start UserActivity connection:', err);
+
+            connection.on("UserConnected", function (user) {
+                console.log('[Dashboard] SignalR: User connected:', user);
+                loadOnlineUsers(); // Refresh the full list
             });
-        }).catch(err => {
-            console.error('Failed to load UserActivity client:', err);
-        });
+
+            connection.on("UserDisconnected", function (user) {
+                console.log('[Dashboard] SignalR: User disconnected:', user);
+                loadOnlineUsers(); // Refresh the full list
+            });
+
+            connection.on("UserActivityUpdated", function (user) {
+                console.log('[Dashboard] SignalR: User activity updated:', user);
+                // Update specific user row instead of full refresh
+                var row = $('#online-users-table tbody tr[data-user-id="' + user.UserId + '"]');
+                if (row.length > 0) {
+                    var lastActivity = new Date(user.LastActivity);
+                    row.find('td:nth-child(5)').text(lastActivity.toLocaleString());
+                }
+            });
+
+            // Add connection state logging
+            connection.onreconnecting((error) => {
+                console.log('[Dashboard] SignalR: Reconnecting...', error);
+            });
+
+            connection.onreconnected((connectionId) => {
+                console.log('[Dashboard] SignalR: Reconnected with ID:', connectionId);
+                loadOnlineUsersCount(); // Refresh count after reconnection
+            });
+
+            connection.onclose((error) => {
+                console.log('[Dashboard] SignalR: Connection closed', error);
+                // Fall back to polling
+                setInterval(loadOnlineUsersCount, 15000);
+            });
+
+            connection.start().then(function () {
+                console.log('[Dashboard] SignalR connection established');
+                // Load initial data after SignalR is connected
+                loadOnlineUsersCount();
+                loadOnlineUsers();
+            }).catch(function (err) {
+                console.warn('[Dashboard] SignalR connection failed, using polling fallback:', err);
+                // Fall back to polling if SignalR fails
+                loadOnlineUsersCount();
+                loadOnlineUsers();
+                setInterval(function() {
+                    loadOnlineUsersCount();
+                    loadOnlineUsers();
+                }, 30000);
+            });
+        } catch (err) {
+            console.warn('[Dashboard] SignalR not available, using polling fallback:', err);
+            // Fall back to polling if SignalR is not available
+            loadOnlineUsersCount();
+            loadOnlineUsers();
+            setInterval(function() {
+                loadOnlineUsersCount();
+                loadOnlineUsers();
+            }, 30000);
+        }
+        
+        console.log('[Dashboard] Online users tracking initialized');
+
+        // Load activity history
+        function loadActivityHistory() {
+            $.ajax({
+                url: '/Services/Administration/UserActivity/GetRecentActivity',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ Take: 20 }),
+                success: function(response) {
+                    console.log('[Dashboard] Activity history response:', response);
+                    updateActivityHistoryTable(response.Activities || []);
+                },
+                error: function(xhr, status, error) {
+                    console.error('[Dashboard] Error loading activity history:', {
+                        status: status,
+                        error: error,
+                        responseText: xhr.responseText
+                    });
+                    $('#activity-history-table tbody').html('<tr><td colspan="4" class="text-center text-danger">Error loading data</td></tr>');
+                }
+            });
+        }
+
+        // Update activity history table
+        function updateActivityHistoryTable(activities) {
+            var tbody = $('#activity-history-table tbody');
+            tbody.empty();
+            
+            if (activities.length === 0) {
+                tbody.append('<tr><td colspan="4" class="text-center text-muted">No recent activity</td></tr>');
+                return;
+            }
+            
+            activities.forEach(function(activity) {
+                var activityTime = new Date(activity.ActivityTime);
+                var activityClass = '';
+                var activityIcon = '';
+                
+                if (activity.ActivityType === 'Login') {
+                    activityClass = 'text-success';
+                    activityIcon = '<i class="fa fa-sign-in text-success"></i>';
+                } else if (activity.ActivityType === 'Logout') {
+                    activityClass = 'text-danger';
+                    activityIcon = '<i class="fa fa-sign-out text-danger"></i>';
+                } else {
+                    activityClass = 'text-info';
+                    activityIcon = '<i class="fa fa-pulse text-info"></i>';
+                }
+                
+                var row = '<tr>' +
+                    '<td><strong>' + (activity.Username || 'Unknown') + '</strong></td>' +
+                    '<td>' + activityIcon + ' ' + activity.ActivityType + '</td>' +
+                    '<td><small>' + (activity.Location || 'Unknown') + '</small></td>' +
+                    '<td><small>' + activityTime.toLocaleString() + '</small></td>' +
+                    '</tr>';
+                tbody.append(row);
+            });
+        }
+
+        // Refresh function for button
+        window.refreshActivityHistory = function() {
+            loadActivityHistory();
+        };
+
+        // Load initial activity history
+        loadActivityHistory();
+
+        // Auto refresh every 30 seconds
+        setInterval(loadActivityHistory, 30000);
+
+        // Check if user is admin and show privacy note
+        var currentUsername = Q.Authorization.username?.toLowerCase() || '';
+        if (Q.Authorization.hasPermission("Administration:Security") || 
+            currentUsername === 'admin') {
+            $('#privacy-note').text('Admin View - All Users');
+        } else {
+            $('#privacy-note').text('Personal View Only');
+        }
 
         
         $('.daterange').daterangepicker({

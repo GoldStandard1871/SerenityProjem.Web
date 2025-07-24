@@ -6,4 +6,6 @@
     IpAddress?: string;
     UserAgent?: string;
     Location?: string;
+    Isp?: string;
+    Timezone?: string;
 }

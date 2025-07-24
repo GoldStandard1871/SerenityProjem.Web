@@ -10,6 +10,7 @@
 <script type="application/json" id="ScriptCulture">@Html.Raw(Serenity.JSON.Stringify(new ScriptCulture()))</script>
 @Html.ScriptBundle("Base")
 @Html.LocalTextScript("Site")
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
 <script type="module" src=@Html.ResolveWithHash("~/esm/Modules/Common/ScriptInit.js")></script>
 <script type="text/javascript">
     @Html.Raw(DynamicScriptManager.GetScriptText("Lookup.Administration.Language"))
