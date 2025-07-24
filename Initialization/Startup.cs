@@ -115,6 +115,7 @@ public partial class Startup
         services.AddSingleton<IUserPasswordValidator, AppServices.UserPasswordValidator>();
         services.AddUserProvider<AppServices.UserAccessor, AppServices.UserRetrieveService>();
         services.AddSingleton<Administration.IUserActivityService, Administration.UserActivityService>();
+        services.AddScoped<Administration.UserActivityBackgroundJobs>();
         services.AddSignalR(options =>
         {
             // Optimize timeout settings for faster disconnect detection
@@ -128,29 +129,26 @@ public partial class Startup
         services.AddScriptBundling();
         services.AddUploadStorage();
         services.AddReporting();
-        // Hangfire servisi (memory tabanlı)
-        services.AddHangfire(config =>
-        {
-            config.UseMemoryStorage();
-        });
-
-        // Hangfire server başlat
-     
+        // Hangfire Configuration - SQL Server Storage with optimized settings
         services.AddHangfire(configuration => configuration
-    .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-    .UseSimpleAssemblyNameTypeSerializer()
-    .UseRecommendedSerializerSettings()
-    .UseSqlServerStorage(Configuration.GetValue<string>("Data:Default:ConnectionString"), new SqlServerStorageOptions
-    {
-        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
-        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-        QueuePollInterval = TimeSpan.Zero,
-        UseRecommendedIsolationLevel = true,
-       
-        DisableGlobalLocks = true
-    }));
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseSqlServerStorage(Configuration.GetValue<string>("Data:Default:ConnectionString"), new SqlServerStorageOptions
+            {
+                CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                QueuePollInterval = TimeSpan.Zero,
+                UseRecommendedIsolationLevel = true,
+                DisableGlobalLocks = true
+            }));
 
-        services.AddHangfireServer();
+        // Hangfire Server with multiple queues for job prioritization
+        services.AddHangfireServer(options =>
+        {
+            options.Queues = new[] { "security", "maintenance", "reports", "monitoring", "default" };
+            options.WorkerCount = Math.Max(Environment.ProcessorCount, 2);
+        });
 
     }
 
@@ -203,11 +201,8 @@ public partial class Startup
         // Hangfire Dashboard'u göster
         app.UseHangfireDashboard("/hangfire");
 
-        // Test için her dakika çalışan bir job ekle
-        RecurringJob.AddOrUpdate(
-        "hello-hangfire",
-        () => Console.WriteLine("Merhaba Hangfire!"),
-        Cron.Minutely);
+        // User Activity Background Jobs
+        RegisterUserActivityJobs();
 
 
 
@@ -227,7 +222,7 @@ public partial class Startup
         app.ApplicationServices.GetRequiredService<IDataMigrations>().Initialize();
         app.UseHangfireDashboard("/jobs", new DashboardOptions
         {
-            Authorization = new[] { new AllowAllDashboardAuthorizationFilter() }
+            Authorization = new[] { new AdminOnlyDashboardAuthorizationFilter() }
         });
 
     }
@@ -239,17 +234,60 @@ public partial class Startup
         }
 
     }
-    public class AllowAllDashboardAuthorizationFilter : Hangfire.Dashboard.IDashboardAuthorizationFilter
+    public class AdminOnlyDashboardAuthorizationFilter : Hangfire.Dashboard.IDashboardAuthorizationFilter
     {
         public bool Authorize(Hangfire.Dashboard.DashboardContext context)
         {
-            return true; // Herkese izin verir
+            var httpContext = context.GetHttpContext();
+            var user = httpContext.User;
+            
+            // Sadece admin kullanıcılar Hangfire dashboard'una erişebilir
+            return user?.Identity?.IsAuthenticated == true && 
+                   (user.IsInRole("Administrators") || 
+                    user.IsInRole("admin") || 
+                    user.Identity.Name?.ToLower() == "admin");
         }
     }
 
 
 
     public static Action<IApplicationBuilder> ConfigureTestPipeline { get; set; }
+
+    /// <summary>
+    /// User Activity için Hangfire job'larını kaydet
+    /// </summary>
+    private static void RegisterUserActivityJobs()
+    {
+        // Günlük eski kayıtları temizle (her gece 02:00'da)
+        RecurringJob.AddOrUpdate<Administration.UserActivityBackgroundJobs>(
+            "cleanup-old-activity-records",
+            job => job.CleanupOldActivityRecords(),
+            "0 2 * * *"); // Her gece saat 02:00
+
+        // Günlük istatistikleri hesapla (her gün 01:00'da)
+        RecurringJob.AddOrUpdate<Administration.UserActivityBackgroundJobs>(
+            "generate-daily-activity-stats",
+            job => job.GenerateDailyActivityStats(),
+            "0 1 * * *"); // Her gece saat 01:00
+
+        // Şüpheli aktiviteleri kontrol et (her 15 dakikada)
+        RecurringJob.AddOrUpdate<Administration.UserActivityBackgroundJobs>(
+            "detect-suspicious-activity",
+            job => job.DetectSuspiciousActivity(),
+            "*/15 * * * *"); // Her 15 dakikada
+
+        // Haftalık rapor oluştur (her Pazartesi 09:00'da)
+        RecurringJob.AddOrUpdate<Administration.UserActivityBackgroundJobs>(
+            "generate-weekly-report",
+            job => job.GenerateWeeklyReport(),
+            "0 9 * * 1"); // Her Pazartesi saat 09:00
+
+        // Online kullanıcı metriklerini logla (her 5 dakikada)
+        RecurringJob.AddOrUpdate<Administration.UserActivityBackgroundJobs>(
+            "log-online-user-metrics",
+            job => job.LogOnlineUserMetrics(),
+            "*/5 * * * *"); // Her 5 dakikada
+    }
 
     public static void RegisterDataProviders()
     {
