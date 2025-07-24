@@ -2,7 +2,26 @@
   "permissions": {
     "allow": [
       "Bash(find:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(dotnet run)",
+      "Bash(dotnet build)",
+      "Bash(tasklist:*)",
+      "Bash(wmic process where processid=14892 delete:*)",
+      "Bash(wmic process where processid=35096 delete:*)",
+      "Bash(wmic process where processid=2688 delete:*)",
+      "Bash(wmic process where processid=16448 delete:*)",
+      "Bash(wmic process where processid=14260 delete:*)",
+      "Bash(wmic process where processid=10364 delete:*)",
+      "Bash(dotnet run:*)",
+      "Bash(curl:*)",
+      "Bash(dotnet clean:*)",
+      "Bash(del Directory.Build.props)",
+      "Bash(sqlcmd:*)",
+      "Bash(taskkill:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(dotnet nuget locals:*)",
+      "Bash(dotnet restore:*)"
     ],
     "deny": []
   }

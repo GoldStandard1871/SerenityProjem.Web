@@ -116,6 +116,7 @@ public partial class Startup
         services.AddUserProvider<AppServices.UserAccessor, AppServices.UserRetrieveService>();
         services.AddSingleton<Administration.IUserActivityService, Administration.UserActivityService>();
         services.AddScoped<Administration.UserActivityBackgroundJobs>();
+        services.AddScoped<Administration.MovieSystem.MovieSystemBackgroundJobs>();
         services.AddSignalR(options =>
         {
             // Optimize timeout settings for faster disconnect detection
@@ -198,16 +199,19 @@ public partial class Startup
         app.UseStaticFiles();
 
         app.UseRouting();
-        // Hangfire Dashboard'u göster
-        app.UseHangfireDashboard("/hangfire");
+        
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        // Service Provider'ı global olarak erişilebilir yap
+        Administration.Hangfire.ServiceProviderAccessor.Current = app.ApplicationServices;
+
+        // Custom Hangfire Dashboard configuration
+        Administration.Hangfire.HangfireCustomDashboard.ConfigureHangfireDashboard(app, app.ApplicationServices);
+        Administration.Hangfire.HangfireCustomDashboard.AddCustomHangfireMetrics();
 
         // User Activity Background Jobs
         RegisterUserActivityJobs();
-
-
-
-        app.UseAuthentication();
-        app.UseAuthorization();
 
         ConfigureTestPipeline?.Invoke(app);
 
@@ -216,37 +220,11 @@ public partial class Startup
         app.UseEndpoints(endpoints => {
             endpoints.MapControllers();
             endpoints.MapHub<Administration.UserActivityHub>("/userActivityHub");
+            endpoints.MapHub<Administration.SystemMonitor.SystemMonitorHub>("/systemMonitorHub");
         });
-
 
         app.ApplicationServices.GetRequiredService<IDataMigrations>().Initialize();
-        app.UseHangfireDashboard("/jobs", new DashboardOptions
-        {
-            Authorization = new[] { new AdminOnlyDashboardAuthorizationFilter() }
-        });
 
-    }
-    public class HangfireAuthorizeFilter : IDashboardAuthorizationFilter
-    {
-        public bool Authorize(DashboardContext context)
-        {
-            return true; // Herkese izin ver
-        }
-
-    }
-    public class AdminOnlyDashboardAuthorizationFilter : Hangfire.Dashboard.IDashboardAuthorizationFilter
-    {
-        public bool Authorize(Hangfire.Dashboard.DashboardContext context)
-        {
-            var httpContext = context.GetHttpContext();
-            var user = httpContext.User;
-            
-            // Sadece admin kullanıcılar Hangfire dashboard'una erişebilir
-            return user?.Identity?.IsAuthenticated == true && 
-                   (user.IsInRole("Administrators") || 
-                    user.IsInRole("admin") || 
-                    user.Identity.Name?.ToLower() == "admin");
-        }
     }
 
 
@@ -287,6 +265,38 @@ public partial class Startup
             "log-online-user-metrics",
             job => job.LogOnlineUserMetrics(),
             "*/5 * * * *"); // Her 5 dakikada
+
+        // MOVIE SYSTEM BACKGROUND JOBS
+        
+        // Film popülerlik skorlarını güncelle (günde 2 kez - 06:00 ve 18:00)
+        RecurringJob.AddOrUpdate<Administration.MovieSystem.MovieSystemBackgroundJobs>(
+            "update-movie-popularity-scores",
+            job => job.UpdateMoviePopularityScores(),
+            "0 6,18 * * *");
+
+        // Film istatistiklerini güncelle (her gece 02:00'da)
+        RecurringJob.AddOrUpdate<Administration.MovieSystem.MovieSystemBackgroundJobs>(
+            "update-movie-statistics", 
+            job => job.UpdateMovieStatistics(),
+            "0 2 * * *");
+
+        // Popüler filmler raporu (her Cuma 10:00'da)
+        RecurringJob.AddOrUpdate<Administration.MovieSystem.MovieSystemBackgroundJobs>(
+            "generate-popular-movies-report",
+            job => job.GeneratePopularMoviesReport(),
+            "0 10 * * 5");
+
+        // Film veritabanı sağlık kontrolü (her gün 04:00'da)
+        RecurringJob.AddOrUpdate<Administration.MovieSystem.MovieSystemBackgroundJobs>(
+            "movie-data-health-check",
+            job => job.PerformMovieDataHealthCheck(),
+            "0 4 * * *");
+
+        // Eski verileri temizle (her Pazar 01:00'da)
+        RecurringJob.AddOrUpdate<Administration.MovieSystem.MovieSystemBackgroundJobs>(
+            "cleanup-orphaned-movie-data",
+            job => job.CleanupOrphanedMovieData(),
+            "0 1 * * 0");
     }
 
     public static void RegisterDataProviders()

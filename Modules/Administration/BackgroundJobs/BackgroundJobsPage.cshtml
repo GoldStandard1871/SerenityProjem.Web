@@ -1,0 +1,105 @@
+@{
+    ViewData["Title"] = "Background Jobs Management";
+}
+
+@section Head
+{
+    <script src="https://unpkg.com/@@microsoft/signalr@@latest/dist/browser/signalr.min.js"></script>
+}
+
+<div id="BackgroundJobsDiv" class="s-BackgroundJobsPage">
+    <div class="page-content">
+        <div class="section-header">
+            <h1><i class="fa fa-cogs"></i> Background Jobs Management</h1>
+            <p class="text-muted">Monitor and manage background jobs, system health, and recurring tasks</p>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="widget-box transparent">
+                    <div class="widget-header">
+                        <h4 class="widget-title">
+                            <i class="fa fa-dashboard"></i>
+                            Hangfire Dashboard
+                        </h4>
+                    </div>
+                    <div class="widget-body">
+                        <div class="widget-main">
+                            <p>Access the complete Hangfire dashboard for detailed job management and monitoring.</p>
+                            <a href="/hangfire" target="_blank" class="btn btn-primary">
+                                <i class="fa fa-external-link"></i> Open Hangfire Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="widget-box transparent">
+                    <div class="widget-header">
+                        <h4 class="widget-title">
+                            <i class="fa fa-heartbeat"></i>
+                            System Monitor
+                        </h4>
+                    </div>
+                    <div class="widget-body">
+                        <div class="widget-main">
+                            <p>Real-time system health monitoring with live metrics and performance data.</p>
+                            <button onclick="openSystemMonitor()" class="btn btn-success">
+                                <i class="fa fa-play"></i> Start System Monitor
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="widget-box transparent">
+                    <div class="widget-header">
+                        <h4 class="widget-title">
+                            <i class="fa fa-list"></i>
+                            Scheduled Jobs Overview
+                        </h4>
+                    </div>
+                    <div class="widget-body">
+                        <div class="widget-main">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5><i class="fa fa-users"></i> User Activity Jobs</h5>
+                                    <ul class="list-unstyled">
+                                        <li><strong>Daily Statistics:</strong> 01:00 - Generate daily activity reports</li>
+                                        <li><strong>Cleanup Old Records:</strong> 02:00 - Remove outdated activity logs</li>
+                                        <li><strong>Security Check:</strong> Every 15 min - Detect suspicious activities</li>
+                                        <li><strong>Weekly Report:</strong> Monday 09:00 - Generate weekly summaries</li>
+                                        <li><strong>Online Metrics:</strong> Every 5 min - Log online user counts</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h5><i class="fa fa-film"></i> Movie System Jobs</h5>
+                                    <ul class="list-unstyled">
+                                        <li><strong>Popularity Update:</strong> 06:00 & 18:00 - Update movie scores</li>
+                                        <li><strong>Statistics Update:</strong> 02:00 - Refresh movie statistics</li>
+                                        <li><strong>Popular Movies Report:</strong> Friday 10:00 - Generate reports</li>
+                                        <li><strong>Health Check:</strong> 04:00 - Verify data integrity</li>
+                                        <li><strong>Data Cleanup:</strong> Sunday 01:00 - Remove orphaned records</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script type="text/javascript">
+function openSystemMonitor() {
+    // Open system monitor in a modal or new window
+    window.open('/hangfire', '_blank');
+}
+</script>
+

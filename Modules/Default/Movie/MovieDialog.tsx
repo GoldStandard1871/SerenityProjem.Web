@@ -8,4 +8,14 @@ export class MovieDialog extends EntityDialog<MovieRow, any> {
     protected getService() { return MovieService.baseUrl; }
 
     protected form = new MovieForm(this.idPrefix);
+    
+    protected afterLoadEntity() {
+        super.afterLoadEntity();
+        
+        // MovieCast editor'ındaki verileri kontrol et
+        if (this.form.CastList && this.entityId) {
+            console.log('Movie dialog loaded, entity ID:', this.entityId);
+            console.log('Movie dialog cast list:', this.form.CastList.getItems());
+        }
+    }
 }

@@ -5,6 +5,19 @@
     <TypeScriptCompileBlocked>true</TypeScriptCompileBlocked>
     <TypeScriptNoEmitOnError>false</TypeScriptNoEmitOnError>
     <DotNetSergen>dotnet sergen</DotNetSergen>
+    
+    <!-- Hot reload and file locking fixes -->
+    <UseAppHost>false</UseAppHost>
+    <RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    
+    <!-- Optimize for development -->
+    <Optimize>false</Optimize>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    
+    <!-- Additional file locking prevention -->
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
   </PropertyGroup>
   <ItemGroup>
     <TypeScriptCompile Remove="node_modules\**" />
@@ -34,6 +47,10 @@
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>
+  <Target Name="RestoreNodeTypes">
+    <!-- Empty target to avoid dependency error -->
+  </Target>
+  
   <Target Name="NpmInstall" BeforeTargets="BeforeBuild" Condition="!Exists('node_modules\.bin\esbuild')">
     <Message Text="Installing NPM packages..." Importance="high" />
     <Exec Command="npm install" />

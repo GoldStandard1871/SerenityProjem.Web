@@ -9,6 +9,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "jsxImportSource": "jsx-dom/min",
+    "lib": ["ES2017", "ES2015.Promise", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Node",
     "newLine": "lf",

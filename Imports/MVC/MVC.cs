@@ -7,6 +7,16 @@ public static partial class MVC
     {
         public static partial class Administration
         {
+            public static partial class ActivityReports
+            {
+                public const string ActivityReportsPage = "~/Modules/Administration/ActivityReports/ActivityReportsPage.cshtml";
+            }
+
+            public static partial class BackgroundJobs
+            {
+                public const string BackgroundJobsPage = "~/Modules/Administration/BackgroundJobs/BackgroundJobsPage.cshtml";
+            }
+
             public static partial class UserActivityHistory
             {
                 public const string UserActivityHistoryIndex = "~/Modules/Administration/UserActivityHistory/UserActivityHistoryIndex.cshtml";

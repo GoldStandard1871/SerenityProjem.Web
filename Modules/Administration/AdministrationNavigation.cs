@@ -6,4 +6,5 @@ using Administration = SerenityProjem.Administration.Pages;
 [assembly: NavigationLink(9200, "Administration/Translations", typeof(Administration.TranslationPage), icon: "fa-comment-o")]
 [assembly: NavigationLink(9300, "Administration/Roles", typeof(Administration.RolePage), icon: "fa-lock")]
 [assembly: NavigationLink(9400, "Administration/User Management", typeof(Administration.UserPage), icon: "fa-users")]
-[assembly: NavigationLink(9000, "Administration/Background Jobs", url: "~/jobs", permission: SerenityProjem.Administration.PermissionKeys.BackgroundJob, icon: "fa-refresh", Target = "_blank")]
+[assembly: NavigationLink(9500, "Administration/Background Jobs", typeof(Administration.BackgroundJobsController), icon: "fa-cogs")]
+[assembly: NavigationLink(9600, "Administration/Activity Reports", typeof(Administration.ActivityReportsController), icon: "fa-chart-line")]

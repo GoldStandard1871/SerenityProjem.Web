@@ -9,7 +9,9 @@ export class MovieCastEditor<P = {}> extends GridEditorBase<MovieCastRow, P> {
 
     protected getLocalTextPrefix() { return MovieCastRow.localTextPrefix; }
 
-    protected getDialogType() { return MovieCastDialog; } // Bu fonksiyon eksikti!
+    protected getDialogType() { return MovieCastDialog; }
+    
+    protected getIdProperty() { return MovieCastRow.idProperty; } // MovieCastId kullan
 
     constructor(props: WidgetProps<P>) {
         super(props);
