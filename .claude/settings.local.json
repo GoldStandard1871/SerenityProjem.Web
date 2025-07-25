@@ -21,7 +21,11 @@
       "Bash(dir:*)",
       "Bash(ls:*)",
       "Bash(dotnet nuget locals:*)",
-      "Bash(dotnet restore:*)"
+      "Bash(dotnet restore:*)",
+      "Bash(dev-start.bat)",
+      "Bash(cmd:*)",
+      "Bash(powershell:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

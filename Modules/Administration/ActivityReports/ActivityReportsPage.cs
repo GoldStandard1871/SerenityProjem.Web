@@ -113,6 +113,35 @@ public class ActivityReportsController : Controller
         }
     }
 
+    [HttpGet]
+    [Route("api/activity-reports/overview")]
+    public JsonResult GetOverviewReport()
+    {
+        try
+        {
+            using var connection = _sqlConnections.NewByKey("Default");
+            
+            var report = new
+            {
+                Summary = GetOverallSummary(connection),
+                RecentActivities = GetRecentActivities(connection, 50),
+                ActivityDistribution = GetOverallActivityDistribution(connection),
+                UserActivitySummary = GetUserActivitySummary(connection),
+                ActiveLocations = GetActiveLocations(connection),
+                SystemHealth = GetSystemHealthMetrics(connection),
+                PageViews = GetTopPageViewsOverall(connection),
+                ActivityTypes = GetOverallActivityDistribution(connection),
+                HourlyDistribution = GetOverallHourlyDistribution(connection)
+            };
+
+            return new JsonResult(report);
+        }
+        catch (Exception ex)
+        {
+            return new JsonResult(new { Error = "Failed to generate overview report", Message = ex.Message });
+        }
+    }
+
     private object GetDailySummary(IDbConnection connection, DateTime date)
     {
         var sql = @"
@@ -448,5 +477,150 @@ public class ActivityReportsController : Controller
             "monthly" => new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(1).AddHours(9), // 1st of next month 9 AM
             _ => DateTime.Today.AddDays(1).AddHours(9)
         };
+    }
+
+    private object GetOverallSummary(IDbConnection connection)
+    {
+        var sql = @"
+            SELECT 
+                COUNT(DISTINCT Username) as UniqueUsers,
+                COUNT(*) as TotalActivities,
+                COUNT(DISTINCT CAST(ActivityTime AS DATE)) as ActiveDays,
+                COUNT(CASE WHEN ActivityType = 'Login' THEN 1 END) as TotalLogins,
+                COUNT(CASE WHEN ActivityType = 'Logout' THEN 1 END) as TotalLogouts,
+                COUNT(CASE WHEN ActivityType = 'PageView' THEN 1 END) as TotalPageViews,
+                COUNT(CASE WHEN ActivityTime >= DATEADD(DAY, -1, GETDATE()) THEN 1 END) as Last24HourActivities,
+                COUNT(CASE WHEN ActivityTime >= DATEADD(DAY, -7, GETDATE()) THEN 1 END) as Last7DayActivities
+            FROM UserActivityHistory";
+
+        return Serenity.Data.SqlMapper.Query(connection, sql).FirstOrDefault();
+    }
+
+    private object[] GetRecentActivities(IDbConnection connection, int limit)
+    {
+        var sql = @"
+            SELECT TOP (@Limit)
+                Username,
+                ActivityType,
+                ActivityTime,
+                Details,
+                Location,
+                IpAddress
+            FROM UserActivityHistory 
+            ORDER BY ActivityTime DESC";
+
+        return Serenity.Data.SqlMapper.Query(connection, sql, new { Limit = limit }).ToArray();
+    }
+
+    private object[] GetOverallActivityDistribution(IDbConnection connection)
+    {
+        var sql = @"
+            SELECT 
+                ActivityType,
+                COUNT(*) as Count,
+                CAST(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER() AS DECIMAL(5,2)) as Percentage
+            FROM UserActivityHistory 
+            GROUP BY ActivityType
+            ORDER BY Count DESC";
+
+        return Serenity.Data.SqlMapper.Query(connection, sql).ToArray();
+    }
+
+    private object[] GetUserActivitySummary(IDbConnection connection)
+    {
+        var sql = @"
+            SELECT 
+                Username,
+                COUNT(*) as TotalActivities,
+                COUNT(DISTINCT CAST(ActivityTime AS DATE)) as ActiveDays,
+                MIN(ActivityTime) as FirstActivity,
+                MAX(ActivityTime) as LastActivity,
+                COUNT(CASE WHEN ActivityType = 'Login' THEN 1 END) as LoginCount,
+                COUNT(CASE WHEN ActivityType = 'PageView' THEN 1 END) as PageViewCount
+            FROM UserActivityHistory 
+            GROUP BY Username
+            ORDER BY TotalActivities DESC";
+
+        return Serenity.Data.SqlMapper.Query(connection, sql).ToArray();
+    }
+
+    private object[] GetActiveLocations(IDbConnection connection)
+    {
+        var sql = @"
+            SELECT TOP 10
+                Location,
+                COUNT(*) as ActivityCount,
+                COUNT(DISTINCT Username) as UniqueUsers
+            FROM UserActivityHistory 
+            WHERE Location IS NOT NULL AND Location != ''
+            GROUP BY Location
+            ORDER BY ActivityCount DESC";
+
+        return Serenity.Data.SqlMapper.Query(connection, sql).ToArray();
+    }
+
+    private object GetSystemHealthMetrics(IDbConnection connection)
+    {
+        var now = DateTime.Now;
+        var sql = @"
+            SELECT 
+                (SELECT COUNT(*) FROM UserActivityHistory WHERE ActivityTime >= DATEADD(MINUTE, -5, GETDATE())) as ActivitiesLast5Min,
+                (SELECT COUNT(DISTINCT Username) FROM UserActivityHistory WHERE ActivityTime >= DATEADD(HOUR, -1, GETDATE())) as ActiveUsersLastHour,
+                (SELECT TOP 1 ActivityTime FROM UserActivityHistory ORDER BY ActivityTime DESC) as LastActivityTime,
+                (SELECT COUNT(*) FROM UserActivityHistory WHERE ActivityType = 'Login' AND ActivityTime >= DATEADD(DAY, -1, GETDATE())) as LoginsLast24Hours";
+
+        var metrics = Serenity.Data.SqlMapper.Query(connection, sql).FirstOrDefault();
+        
+        // Calculate system status
+        var lastActivity = metrics?.LastActivityTime ?? DateTime.MinValue;
+        var timeSinceLastActivity = now - lastActivity;
+        var status = timeSinceLastActivity.TotalMinutes switch
+        {
+            < 5 => "Active",
+            < 30 => "Normal",
+            < 60 => "Slow",
+            _ => "Inactive"
+        };
+
+        return new
+        {
+            Status = status,
+            ActivitiesLast5Min = metrics?.ActivitiesLast5Min ?? 0,
+            ActiveUsersLastHour = metrics?.ActiveUsersLastHour ?? 0,
+            LoginsLast24Hours = metrics?.LoginsLast24Hours ?? 0,
+            LastActivityTime = lastActivity,
+            TimeSinceLastActivity = $"{(int)timeSinceLastActivity.TotalMinutes} minutes ago"
+        };
+    }
+
+    private object[] GetTopPageViewsOverall(IDbConnection connection)
+    {
+        var sql = @"
+            SELECT TOP 10
+                Details as ActivityDetail,
+                COUNT(*) as ViewCount,
+                COUNT(DISTINCT Username) as UniqueViewers
+            FROM UserActivityHistory 
+            WHERE ActivityType = 'PageView'
+            AND Details IS NOT NULL
+            GROUP BY Details
+            ORDER BY ViewCount DESC";
+
+        return Serenity.Data.SqlMapper.Query(connection, sql).ToArray();
+    }
+
+    private object[] GetOverallHourlyDistribution(IDbConnection connection)
+    {
+        var sql = @"
+            SELECT 
+                DATEPART(HOUR, ActivityTime) as Hour,
+                COUNT(*) as ActivityCount,
+                COUNT(DISTINCT Username) as UniqueUsers
+            FROM UserActivityHistory 
+            WHERE ActivityTime >= DATEADD(DAY, -7, GETDATE())
+            GROUP BY DATEPART(HOUR, ActivityTime)
+            ORDER BY Hour";
+
+        return Serenity.Data.SqlMapper.Query(connection, sql).ToArray();
     }
 }

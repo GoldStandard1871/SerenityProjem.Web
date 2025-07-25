@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Serenity;
 using Serenity.Data;
 using Serenity.Reporting;
@@ -9,6 +10,7 @@ using Dapper;
 using MyRequest = Serenity.Services.ListRequest;
 using MyResponse = Serenity.Services.ListResponse<SerenityProjem.Administration.OnlineUserInfo>;
 using MyRow = SerenityProjem.Administration.UserRow;
+using System.Net;
 
 namespace SerenityProjem.Administration.Endpoints;
 
@@ -113,6 +115,65 @@ public class UserActivityEndpoint : ServiceEndpoint
             return new GetRecentActivityResponse { Activities = activities };
         });
     }
+
+    [HttpPost]
+    public Result<LogActivityResponse> LogActivity(LogActivityRequest request,
+        [FromServices] ISqlConnections sqlConnections,
+        [FromServices] IHttpContextAccessor httpContextAccessor)
+    {
+        return this.ExecuteMethod(() =>
+        {
+            var username = Context.User?.Identity?.Name ?? "";
+            var userId = Context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0";
+            
+            if (string.IsNullOrEmpty(username))
+                return new LogActivityResponse { Success = false, Message = "User not authenticated" };
+
+            using var connection = sqlConnections.NewByKey("Default");
+            
+            // Get client IP and user agent
+            var httpContext = httpContextAccessor.HttpContext;
+            var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString() ?? "Unknown";
+            var userAgent = httpContext?.Request?.Headers["User-Agent"].ToString() ?? "Unknown";
+            
+            // Get location from IP (simplified - in production use a geolocation service)
+            var location = "Unknown";
+            if (ipAddress.StartsWith("127.") || ipAddress.StartsWith("::1"))
+                location = "Local";
+            
+            var sql = @"
+                INSERT INTO UserActivityHistory 
+                (UserId, Username, ActivityType, Details, ActivityTime, IpAddress, UserAgent, Location)
+                VALUES 
+                (@UserId, @Username, @ActivityType, @Details, @ActivityTime, @IpAddress, @UserAgent, @Location)";
+            
+            var parameters = new
+            {
+                UserId = int.TryParse(userId, out var uid) ? uid : 0,
+                Username = username,
+                ActivityType = request.ActivityType ?? "Unknown",
+                Details = request.Details,
+                ActivityTime = DateTime.Now,
+                IpAddress = ipAddress,
+                UserAgent = userAgent,
+                Location = location
+            };
+            
+            try
+            {
+                Dapper.SqlMapper.Execute(connection, sql, parameters);
+                return new LogActivityResponse { Success = true };
+            }
+            catch (Exception ex)
+            {
+                return new LogActivityResponse 
+                { 
+                    Success = false, 
+                    Message = "Failed to log activity: " + ex.Message 
+                };
+            }
+        });
+    }
 }
 
 public class OnlineUsersCountResponse : ServiceResponse
@@ -147,4 +208,17 @@ public class ActivityHistoryItem
     public string ActivityType { get; set; } = "";
     public string Location { get; set; } = "";
     public DateTime ActivityTime { get; set; }
+}
+
+public class LogActivityRequest : ServiceRequest
+{
+    public string ActivityType { get; set; } = "";
+    public string Details { get; set; } = "";
+    public DateTime? Timestamp { get; set; }
+}
+
+public class LogActivityResponse : ServiceResponse
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
 }

@@ -31,8 +31,9 @@
                                 <div class="col-md-4">
                                     <label>Report Type:</label>
                                     <select id="reportType" class="form-control">
+                                        <option value="overview" selected>Overview</option>
                                         <option value="daily">Daily Report</option>
-                                        <option value="weekly" selected>Weekly Report</option>
+                                        <option value="weekly">Weekly Report</option>
                                         <option value="monthly">Monthly Report</option>
                                     </select>
                                 </div>
@@ -116,21 +117,7 @@
         <!-- Charts Row 1 -->
         <div id="chartsContainer" style="display: none;">
             <div class="row mb-3">
-                <div class="col-lg-8">
-                    <div class="widget-box transparent">
-                        <div class="widget-header">
-                            <h4 class="widget-title">
-                                <i class="fa fa-chart-line"></i> Activity Trends
-                            </h4>
-                        </div>
-                        <div class="widget-body">
-                            <div class="widget-main">
-                                <canvas id="activityTrendChart" style="height: 300px;"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-4">
+                <div class="col-lg-6">
                     <div class="widget-box transparent">
                         <div class="widget-header">
                             <h4 class="widget-title">
@@ -144,10 +131,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Charts Row 2 -->
-            <div class="row mb-3">
                 <div class="col-lg-6">
                     <div class="widget-box transparent">
                         <div class="widget-header">
@@ -232,6 +215,45 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Overview Section -->
+            <div id="overviewSection" class="row" style="display: none;">
+                <!-- System Health Status -->
+                <div class="col-lg-12 mb-3">
+                    <div class="widget-box transparent">
+                        <div class="widget-header">
+                            <h4 class="widget-title">
+                                <i class="fa fa-heartbeat"></i> System Health
+                            </h4>
+                        </div>
+                        <div class="widget-body">
+                            <div class="widget-main">
+                                <div id="systemHealthStatus" class="alert alert-info">
+                                    <!-- Health status will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Activities Timeline -->
+                <div class="col-lg-12">
+                    <div class="widget-box transparent">
+                        <div class="widget-header">
+                            <h4 class="widget-title">
+                                <i class="fa fa-history"></i> Recent User Activities
+                            </h4>
+                        </div>
+                        <div class="widget-body">
+                            <div class="widget-main">
+                                <div id="activityTimeline" class="activity-timeline">
+                                    <!-- Timeline will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -278,6 +300,9 @@ function generateReport() {
     let params = {};
     
     switch (reportType) {
+        case 'overview':
+            apiUrl = '/api/activity-reports/overview';
+            break;
         case 'daily':
             apiUrl = '/api/activity-reports/daily';
             if (reportDate) params.date = reportDate;
@@ -296,8 +321,11 @@ function generateReport() {
             break;
     }
     
+    console.log('Generating report:', reportType, 'URL:', apiUrl, 'Params:', params);
+    
     $.get(apiUrl, params)
         .done(function(data) {
+            console.log('Report data received:', data);
             currentReportData = data;
             displayReport(data, reportType);
             showLoading(false);
@@ -312,10 +340,13 @@ function generateReport() {
 
 function displayReport(data, reportType) {
     // Update summary cards
-    updateSummaryCards(data.Summary);
+    updateSummaryCards(data.Summary || data);
     
     // Create charts based on report type
     switch (reportType) {
+        case 'overview':
+            createOverviewDisplay(data);
+            break;
         case 'daily':
             createDailyCharts(data);
             break;
@@ -334,26 +365,33 @@ function displayReport(data, reportType) {
 function updateSummaryCards(summary) {
     $('#uniqueUsers').text(summary.UniqueUsers || 0);
     $('#totalActivities').text(summary.TotalActivities || 0);
-    $('#totalLogins').text(summary.Logins || 0);
-    $('#totalPageViews').text(summary.PageViews || 0);
+    // Check for both field names (daily reports use 'Logins', overview uses 'TotalLogins')
+    $('#totalLogins').text(summary.Logins || summary.TotalLogins || 0);
+    $('#totalPageViews').text(summary.PageViews || summary.TotalPageViews || 0);
 }
 
 function createDailyCharts(data) {
+    console.log('Daily Report Data:', data);
+    console.log('HourlyActivity:', data.HourlyActivity);
+    
     // Hourly Activity Chart
     if (data.HourlyActivity && data.HourlyActivity.length > 0) {
         const hourlyLabels = data.HourlyActivity.map(h => h.Hour + ':00');
         const hourlyData = data.HourlyActivity.map(h => h.ActivityCount);
         
+        console.log('Hourly Labels:', hourlyLabels);
+        console.log('Hourly Data:', hourlyData);
+        
         createChart('hourlyActivityChart', {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: hourlyLabels,
                 datasets: [{
                     label: 'Activities',
                     data: hourlyData,
+                    backgroundColor: 'rgba(75, 192, 192, 0.8)',
                     borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    tension: 0.4
+                    borderWidth: 1
                 }]
             },
             options: {
@@ -364,9 +402,25 @@ function createDailyCharts(data) {
                         display: true,
                         text: 'Hourly Activity Distribution'
                     }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
                 }
             }
         });
+    } else {
+        console.log('No hourly activity data available');
+        // Show empty state
+        const canvas = document.getElementById('hourlyActivityChart');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#999';
+            ctx.fillText('No hourly activity data available', canvas.width / 2, canvas.height / 2);
+        }
     }
     
     // Activity Types Pie Chart
@@ -438,7 +492,8 @@ function createWeeklyCharts(data) {
         const activityData = data.DailyTrends.map(d => d.ActivityCount);
         const userStrends = data.DailyTrends.map(d => d.UniqueUsers);
         
-        createChart('activityTrendChart', {
+        // Weekly trends moved to hourly activity chart area
+        createChart('hourlyActivityChart', {
             type: 'line',
             data: {
                 labels: trendLabels,
@@ -447,35 +502,16 @@ function createWeeklyCharts(data) {
                     data: activityData,
                     borderColor: 'rgb(75, 192, 192)',
                     backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    yAxisID: 'y'
-                }, {
-                    label: 'Unique Users',
-                    data: userStrends,
-                    borderColor: 'rgb(255, 99, 132)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    yAxisID: 'y1'
+                    tension: 0.4
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                scales: {
-                    y: {
-                        type: 'linear',
+                plugins: {
+                    title: {
                         display: true,
-                        position: 'left',
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        grid: {
-                            drawOnChartArea: false,
-                        },
+                        text: 'Daily Activity Trends'
                     }
                 }
             }
@@ -585,29 +621,34 @@ function createChart(canvasId, config) {
 
 function updateDataTables(data) {
     // Update Top Pages table
+    const pageTableBody = $('#topPagesTable tbody');
+    pageTableBody.empty();
+    
     if (data.PageViews && data.PageViews.length > 0) {
-        const pageTableBody = $('#topPagesTable tbody');
-        pageTableBody.empty();
-        
         data.PageViews.forEach(page => {
             pageTableBody.append(`
                 <tr>
-                    <td>${page.ActivityDetail || 'N/A'}</td>
-                    <td><span class="badge badge-info">${page.ViewCount}</span></td>
-                    <td><span class="badge badge-success">${page.UniqueViewers}</span></td>
+                    <td>${page.ActivityDetail || page.Details || 'Dashboard'}</td>
+                    <td class="views-count">${page.ViewCount}</td>
+                    <td class="unique-viewers-count">${page.UniqueViewers}</td>
                 </tr>
             `);
         });
+    } else {
+        // Show sample data if no real data
+        pageTableBody.append(`
+            <tr><td colspan="3" class="text-center text-muted">No page view data available</td></tr>
+        `);
     }
     
     // Update User Activity table
+    const userTableBody = $('#userActivityTable tbody');
+    userTableBody.empty();
+    
     if (data.TopUsers && data.TopUsers.length > 0) {
-        const userTableBody = $('#userActivityTable tbody');
-        userTableBody.empty();
-        
         data.TopUsers.forEach(user => {
-            const firstActivity = new Date(user.FirstActivity).toLocaleString();
-            const lastActivity = new Date(user.LastActivity).toLocaleString();
+            const firstActivity = user.FirstActivity ? new Date(user.FirstActivity).toLocaleString() : 'N/A';
+            const lastActivity = user.LastActivity ? new Date(user.LastActivity).toLocaleString() : 'N/A';
             
             userTableBody.append(`
                 <tr>
@@ -618,6 +659,25 @@ function updateDataTables(data) {
                 </tr>
             `);
         });
+    } else if (data.UserActivitySummary && data.UserActivitySummary.length > 0) {
+        // Use UserActivitySummary for Overview
+        data.UserActivitySummary.slice(0, 10).forEach(user => {
+            const firstActivity = user.FirstActivity ? new Date(user.FirstActivity).toLocaleString() : 'N/A';
+            const lastActivity = user.LastActivity ? new Date(user.LastActivity).toLocaleString() : 'N/A';
+            
+            userTableBody.append(`
+                <tr>
+                    <td><strong>${user.Username}</strong></td>
+                    <td><span class="badge badge-primary">${user.TotalActivities}</span></td>
+                    <td><small>${firstActivity}</small></td>
+                    <td><small>${lastActivity}</small></td>
+                </tr>
+            `);
+        });
+    } else {
+        userTableBody.append(`
+            <tr><td colspan="4" class="text-center text-muted">No user activity data available</td></tr>
+        `);
     }
 }
 
@@ -632,11 +692,226 @@ function showLoading(show) {
 function showReportContent() {
     $('#summaryCards').show();
     $('#chartsContainer').show();
+    if ($('#reportType').val() === 'overview') {
+        $('#overviewSection').show();
+    }
 }
 
 function hideReportContent() {
     $('#summaryCards').hide();
     $('#chartsContainer').hide();
+    $('#overviewSection').hide();
+}
+
+function createOverviewDisplay(data) {
+    // Show charts container for overview too
+    $('#chartsContainer').show();
+    $('#overviewSection').show();
+    
+    // Update system health status
+    if (data.SystemHealth) {
+        const health = data.SystemHealth;
+        const statusClass = health.Status === 'Active' ? 'alert-success' : 
+                           health.Status === 'Normal' ? 'alert-info' : 
+                           health.Status === 'Slow' ? 'alert-warning' : 'alert-danger';
+        
+        $('#systemHealthStatus')
+            .removeClass('alert-info alert-success alert-warning alert-danger')
+            .addClass(statusClass)
+            .html(`
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>System Status:</strong> ${health.Status}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Active Users (Last Hour):</strong> ${health.ActiveUsersLastHour}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Activities (Last 5 Min):</strong> ${health.ActivitiesLast5Min}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Last Activity:</strong> ${health.TimeSinceLastActivity}
+                    </div>
+                </div>
+            `);
+    }
+    
+    // Create activity timeline
+    console.log('Recent Activities:', data.RecentActivities);
+    if (data.RecentActivities && data.RecentActivities.length > 0) {
+        const timeline = $('#activityTimeline');
+        timeline.empty();
+        
+        let currentDate = '';
+        data.RecentActivities.forEach(activity => {
+            console.log('Processing activity:', activity);
+            const activityDate = new Date(activity.ActivityTime).toLocaleDateString();
+            const activityTime = new Date(activity.ActivityTime).toLocaleTimeString();
+            
+            // Add date header if new date
+            if (activityDate !== currentDate) {
+                currentDate = activityDate;
+                timeline.append(`
+                    <div class="timeline-date">
+                        <i class="fa fa-calendar"></i> ${activityDate}
+                    </div>
+                `);
+            }
+            
+            // Get activity icon and color
+            const { icon, color } = getActivityIcon(activity.ActivityType);
+            
+            // Add activity item
+            timeline.append(`
+                <div class="timeline-item">
+                    <div class="timeline-icon" style="background-color: ${color};">
+                        <i class="fa ${icon}"></i>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <strong>${activity.Username}</strong>
+                            <span class="timeline-time">${activityTime}</span>
+                        </div>
+                        <div class="timeline-body">
+                            ${activity.ActivityType}
+                            ${activity.Details ? `: ${activity.Details}` : ''}
+                            ${activity.Location ? `<br><small class="text-muted"><i class="fa fa-map-marker"></i> ${activity.Location}</small>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `);
+        });
+    }
+    
+    // Create activity distribution chart
+    if (data.ActivityDistribution && data.ActivityDistribution.length > 0) {
+        const labels = data.ActivityDistribution.map(d => d.ActivityType);
+        const counts = data.ActivityDistribution.map(d => d.Count);
+        
+        createChart('activityTypeChart', {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: counts,
+                    backgroundColor: [
+                        '#28a745', // Login - green
+                        '#dc3545', // Logout - red
+                        '#17a2b8', // PageView - info
+                        '#ffc107', // Action - warning
+                        '#6f42c1', // Other - purple
+                        '#e83e8c'  // Additional - pink
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Activity Type Distribution'
+                    },
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+    }
+    
+    // Create user activity heatmap
+    if (data.UserActivitySummary && data.UserActivitySummary.length > 0) {
+        const userLabels = data.UserActivitySummary.slice(0, 10).map(u => u.Username);
+        const userData = data.UserActivitySummary.slice(0, 10).map(u => u.TotalActivities);
+        
+        createChart('topUsersChart', {
+            type: 'bar',
+            data: {
+                labels: userLabels,
+                datasets: [{
+                    label: 'Total Activities',
+                    data: userData,
+                    backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y', // This makes it horizontal
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Top 10 Most Active Users'
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+    
+    // Create hourly activity chart for overview
+    if (data.HourlyDistribution && data.HourlyDistribution.length > 0) {
+        const hourLabels = [];
+        const hourData = [];
+        
+        // Create 24 hour labels and data
+        for (let i = 0; i < 24; i++) {
+            hourLabels.push(i + ':00');
+            const hourActivity = data.HourlyDistribution.find(h => h.Hour === i);
+            hourData.push(hourActivity ? hourActivity.ActivityCount : 0);
+        }
+        
+        createChart('hourlyActivityChart', {
+            type: 'bar',
+            data: {
+                labels: hourLabels,
+                datasets: [{
+                    label: 'Activities',
+                    data: hourData,
+                    backgroundColor: 'rgba(255, 206, 86, 0.8)',
+                    borderColor: 'rgba(255, 206, 86, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Activity Distribution by Hour (Last 7 Days)'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+}
+
+function getActivityIcon(activityType) {
+    const iconMap = {
+        'Login': { icon: 'fa-sign-in-alt', color: '#28a745' },
+        'Logout': { icon: 'fa-sign-out-alt', color: '#dc3545' },
+        'PageView': { icon: 'fa-eye', color: '#17a2b8' },
+        'Action': { icon: 'fa-bolt', color: '#ffc107' },
+        'Create': { icon: 'fa-plus-circle', color: '#28a745' },
+        'Update': { icon: 'fa-edit', color: '#ffc107' },
+        'Delete': { icon: 'fa-trash', color: '#dc3545' },
+        'Export': { icon: 'fa-download', color: '#6f42c1' }
+    };
+    
+    return iconMap[activityType] || { icon: 'fa-circle', color: '#6c757d' };
 }
 
 function exportReport() {
@@ -816,10 +1091,27 @@ function performExport() {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+.stat-card.bg-primary {
+    background-color: #0d6efd !important;
+}
+
+.stat-card.bg-success {
+    background-color: #198754 !important;
+}
+
+.stat-card.bg-info {
+    background-color: #0dcaf0 !important;
+}
+
+.stat-card.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
 .stat-icon {
     font-size: 2.5em;
     margin-right: 15px;
-    opacity: 0.8;
+    opacity: 0.9;
 }
 
 .stat-content {
@@ -830,11 +1122,14 @@ function performExport() {
     font-size: 2em;
     font-weight: bold;
     margin-bottom: 5px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
 }
 
 .stat-text {
     font-size: 0.9em;
-    opacity: 0.9;
+    font-weight: 500;
+    opacity: 1;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
 
 .widget-box {
@@ -870,6 +1165,138 @@ function performExport() {
 }
 
 .badge {
-    font-size: 0.8em;
+    font-size: 0.9em;
+    font-weight: 600;
+    padding: 0.4em 0.6em;
+}
+
+.badge-primary {
+    background-color: #0d6efd !important;
+    color: white !important;
+}
+
+/* Table styles for better readability */
+.table td {
+    color: #212529 !important;
+    font-weight: 500;
+}
+
+.table th {
+    color: #212529 !important;
+    font-weight: 700;
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.table td small {
+    color: #495057 !important;
+    font-weight: 500;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Top Pages table specific styling */
+#topPagesTable td.views-count {
+    font-weight: 700 !important;
+    color: #0d6efd !important;  /* Blue for Views */
+    font-size: 1.2em !important;
+    text-align: center;
+}
+
+#topPagesTable td.unique-viewers-count {
+    font-weight: 700 !important;
+    color: #198754 !important;  /* Green for Unique Viewers */
+    font-size: 1.2em !important;
+    text-align: center;
+}
+
+#topPagesTable tbody tr td:first-child {
+    font-weight: 600 !important;
+    color: #212529 !important;
+}
+
+/* Override any inherited styles */
+.widget-box .table td {
+    background-color: white !important;
+}
+
+.widget-box.transparent .table td {
+    background-color: transparent !important;
+}
+
+/* User Activity table specific styling */
+#userActivityTable .badge {
+    font-size: 1em;
+}
+
+/* Activity Timeline Styles */
+.activity-timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.activity-timeline:before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e9ecef;
+}
+
+.timeline-date {
+    margin: 20px 0 10px -30px;
+    padding: 10px 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #495057;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+    padding-left: 20px;
+}
+
+.timeline-icon {
+    position: absolute;
+    left: -23px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    z-index: 1;
+}
+
+.timeline-content {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.timeline-time {
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+.timeline-body {
+    color: #495057;
+    font-size: 0.95em;
 }
 </style>
